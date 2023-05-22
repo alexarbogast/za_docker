@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+
+#####################################################################
+# Description:  entrypoint.sh
+#
+#               This file, 'entrypoint.sh', implements general ENTRYPOINT
+#               for use in Tormach PathPilot Robot images. It uses falling
+#               design pattern from the Root user to the passed USER or
+#               to the pre-made virtualpathpilot user.
+#
+# Copyright (C) 2018-       John Morris  <john AT dovetail HYPHEN automata DOT com>
+# Copyright (C) 2018-       Alexander Rössler  <alex AT machinekoder DOT com>
+# Copyright (C) 2021        Jakub Fišer  <jakub DOT fiser AT eryaf DOT com>
+#
+# Tormach internal license
+#
+######################################################################
+
+# Prohibit use of undefined variables
+set -o nounset
+# Set the exit code of a pipeline to that of the rightmost command to exit
+# with a non-zero status
+set -o pipefail
+
+################################################################################
+# Global Variables Declarations
+################################################################################
+
+ROS_DISTRO=${ROS_DISTRO:-"Unknown ROS distribuiton"}
+IMAGE_TYPE=${IMAGE_TYPE:-"Invalid image"}
+IMAGE_VERSION=${IMAGE_VERSION:-"Unknown image version"}
+GIT_REV=${GIT_REV:-"Unknown git revision"}
+DOCKER_REPO=${DOCKER_REPO:-"No Container repository set"}
+DOCKER_REGISTRY=${DOCKER_REGISTRY:-"No Container registry set"}
+ROBOT_MODEL=${ROBOT_MODEL:-"Unknown robot model"}
+ROBOT_PACKAGE=${ROBOT_PACKAGE:-"Unknow robot package"}
+RELEASE_VERSION=${RELEASE_VERSION:-"Unknown release version"}
+RELEASE_CODENAME=${RELEASE_CODENAME:-"Unofficial release"}
+OS_VENDOR=${OS_VENDOR:-"Unknow OS vendor"}
+DEBIAN_SUITE=${DEBIAN_SUITE:-"No Debian version set"}
+
+HARDWARE_MODE=${HARDWARE_MODE:-"sim"}
+ROS_SETUP=${ROS_SETUP:-"/opt/ros/$ROS_DISTRO/setup.bash"}
+DOCKER_CONFIG=${DOCKER_CONFIG:-""}
+
+UID=${UID:-}
+GID=${GID:-}
+USER=${USER:-""}
+HOME=${HOME:-""}
+
+################################################################################
+# Maintenance Functions
+################################################################################
+
+NAME=$(basename $0 | sed 's/\(\..*\)$//')
+
+_write_out() {
+    local level=$1
+    local message="${@:2}"
+
+    printf "%b" \
+        "$message\n"
+}
+
+log_info() {
+    _write_out "1" "$@"
+} >&2
+log_warning() {
+    _write_out "2" "$@"
+} >&2
+log_error() {
+    _write_out "3" "$@"
+} >&2
+
+success() {
+    _write_out "5" "Script $NAME was successful!"
+    exit 0
+} >&2
+failure() {
+    _write_out "6" "Script $NAME failed!"
+    exit 1
+} >&2
+
+################################################################################
+# Program Functions
+################################################################################
+
+identify() {
+    log_info "Self description of Tormach PathPilot Robot image"
+    log_warning "Container will end after execution of this function!"
+
+    log_info "\nVALUES\n" \
+        "ROS distribution: $ROS_DISTRO\n" \
+        "Image type: $IMAGE_TYPE\n" \
+        "Image version:$IMAGE_VERSION\n" \
+        "Git revision: $GIT_REV\n" \
+        "Container repository: $DOCKER_REPO\n" \
+        "Container registry: $DOCKER_REGISTRY\n" \
+        "Robot model: $ROBOT_MODEL\n" \
+        "Robot package: $ROBOT_PACKAGE\n" \
+        "Release version: $RELEASE_VERSION\n" \
+        "Release codename: $RELEASE_CODENAME\n" \
+        "OS vendor: $OS_VENDOR\n" \
+        "Debian suite: $DEBIAN_SUITE\n" \
+        "Current working directory: $(pwd)\n"
+
+    success
+}
+
+add_hostname_to_hosts() {
+    echo "127.0.2.1  $HOSTNAME" >>/etc/hosts
+    local retval="$?"
+    if ((retval != 0)); then
+        log_error "Cannot add current hostname $HOSTNAME to /etc/hosts"
+    fi
+    return ${retval}
+}
+
+set_machinekit_hal_remote() {
+    local remote=${1:-"0"}
+
+    sed -i /etc/machinekit/machinekit.ini \
+        -e "\$a ANNOUNCE_IPV4=${remote}\nANNOUNCE_IPV6=${remote}" \
+        -e '/^ANNOUNCE_IPV/ d'
+    local retval="$?"
+    if ((retval != 0)); then
+        log_error "Cannot set Machinekit-HAL remote in " \
+            "/etc/machinekit/machinekit.ini to $remote"
+    fi
+
+    return ${retval}
+}
+
+check_for_file() {
+    local file="$1"
+
+    if ! [[ -e $file ]]; then
+        log_error "File $file does not exists!"
+        return 1
+    fi
+
+    return 0
+}
+
+check_for_root_permission() {
+    local current_uid="$(id -u)"
+    local current_gid="$(id -g)"
+
+    if ((current_uid == 0 && current_gid == 0)); then
+        return 0
+    fi
+    log_error "Not running as the Root, but as UID $current_uid and GID " \
+        "$current_gid. This is not possible!"
+    return 1
+}
+
+check_for_uid_gid() {
+    local re="^[1-9][0-9]{0,}$"
+
+    if [[ "$UID" =~ $re && "$GID" =~ $re ]]; then
+        return 0
+    fi
+
+    if [[ "$UID" == "0" && "$GID" == "" ]]; then
+        return 1
+    fi
+
+    log_error "Passed only UID or only GID, this is illegal configuration!"
+    return 2
+}
+
+trim_array() {
+    local value="$3"
+
+    trim_space
+    eval "$1[$2]=$value"
+
+    return 0
+}
+
+trim_space() {
+    if [[ "$value" =~ "^([[:space:]]+)" ]]; then
+        val="${value:${#BASH_REMATCH[0]}}"
+    fi
+
+    if [[ "$value" =~ "([[:space:]]+)$" ]]; then
+        val="${value:0:${#value}-${#BASH_REMATCH[0]}}"
+    fi
+
+    return 0
+}
+
+source_files_command() {
+    local input_list="$1"
+
+    local -a array
+    readarray -c1 -C 'trim_array array' -td: <<<"$input_list"
+    local retval="$?"
+    if ((retval != 0)); then
+        log_error "Could not read the input into list"
+        return ${retval}
+    fi
+
+    USER_COMMAND+="set +o nounset;"$'\n'
+
+    local item=""
+    for element in "${array[@]}"; do
+        check_for_file "$element"
+        retval="$?"
+        if ((retval != 0)); then
+            log_error "Skipping file $element!"
+            continue
+        fi
+        read -r -d '' item <<-EOM
+    source $element;
+EOM
+        USER_COMMAND+="$item"$'\n'
+    done
+
+    USER_COMMAND+="set -o nounset;"
+
+    return 0
+}
+
+################################################################################
+# Main Function
+################################################################################
+
+_main() {
+    local retval="-1"
+
+    # Check we are root and if not exit out
+    check_for_root_permission
+    retval="$?"
+    if ((retval != 0)); then
+        failure
+    fi
+
+    local pathpilot_uid="$(id -u ${PPRUSER})"
+    local pathpilot_gid="$(id -g ${PPRUSER})"
+
+    export USER="$PPRUSER"
+    export HOME="/home/$USER"
+    export FLAVOR="posix"         # Explicitly state we want vanilla Linux Machinekit-HAL
+
+    add_hostname_to_hosts
+    retval="$?"
+    if ((retval != 0)); then
+        failure
+    fi
+
+    # Turn off Machinekit-HAL mDNS announcements; dbus socket not bind-mounted
+    set_machinekit_hal_remote "0"
+    retval="$?"
+    if ((retval != 0)); then
+        failure
+    fi
+
+    source_files_command "$ROS_SETUP" # make ROS accessible in this script
+    
+    # ======== TEMPORARY
+    export ROS_MASTER_URI=http://127.0.0.1:11311
+    export ROS_IP=127.0.0.1
+    source "$ROS_SETUP" 
+    # ==========
+
+    exec /bin/bash
+
+    # The end of the line
+    retval="$?"
+    if ((retval != 0)); then
+        failure
+    fi
+    success
+}
+################################################################################
+# Start of execution
+################################################################################
+
+_main
+# Chatch all unaddressed exit situations
+log_error "There was an error in script execution!"
+failure
