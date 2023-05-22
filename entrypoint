@@ -116,6 +116,23 @@ add_hostname_to_hosts() {
     return ${retval}
 }
 
+add_user_to_groups() {
+    local user_name="$1"
+    local -a user_groups=("${@:2}")
+    local retval="-1"
+
+    for grp in "${user_groups[@]}"; do
+        adduser ${user_name} ${grp} >&/dev/null
+        retval="$?"
+        if ((retval != 0)); then
+            log_error "Cannot add user $user_name to group $grp"
+            return ${retval}
+        fi
+    done
+
+    return 0
+}
+
 set_machinekit_hal_remote() {
     local remote=${1:-"0"}
 
@@ -222,6 +239,24 @@ EOM
     return 0
 }
 
+run_pathpilot_robot_command() {
+    local target_user="$1"
+    local run_command="$2"
+
+    sudo -u ${target_user} -E bash -c "
+        eval \"${USER_COMMAND}\"
+        exec ${run_command}
+    "
+
+    local retval="$?"
+    if ((retval != 0)); then
+        log_error "Trying to exec custom command \n'$run_command'\n under" \
+            "user $target_user with additional command \n'$USER_COMMAND'\n" \
+            "failed with ERROR CODE $retval"
+    fi
+    return ${retval}
+}
+
 ################################################################################
 # Main Function
 ################################################################################
@@ -242,6 +277,14 @@ _main() {
     export USER="$PPRUSER"
     export HOME="/home/$USER"
     export FLAVOR="posix"         # Explicitly state we want vanilla Linux Machinekit-HAL
+
+    log_info "Running under UID $pathpilot_uid and GID $pathpilot_gid" \
+
+    add_user_to_groups "$USER" "${user_groups[@]}"
+    retval="$?"
+    if ((retval != 0)); then
+        failure
+    fi
 
     add_hostname_to_hosts
     retval="$?"
@@ -264,7 +307,10 @@ _main() {
     source "$ROS_SETUP" 
     # ==========
 
-    exec /bin/bash
+    # Everything else in the books
+    local -a default_cmd=("/bin/bash" "--login" "-i")
+    log_info "Running command '${EXECUTE_COMMAND:-${default_cmd[@]}}'"
+    run_pathpilot_robot_command "$USER" "${EXECUTE_COMMAND:-${default_cmd[@]}}"
 
     # The end of the line
     retval="$?"
