@@ -30,15 +30,8 @@ IDENTIFY=${IDENTIFY:-0}
 LAUNCHER=${LAUNCHER:-"0"}
 
 ROS_DISTRO=${ROS_DISTRO:-"Unknown ROS distribuiton"}
-IMAGE_TYPE=${IMAGE_TYPE:-"Invalid image"}
-IMAGE_VERSION=${IMAGE_VERSION:-"Unknown image version"}
+
 GIT_REV=${GIT_REV:-"Unknown git revision"}
-DOCKER_REPO=${DOCKER_REPO:-"No Container repository set"}
-DOCKER_REGISTRY=${DOCKER_REGISTRY:-"No Container registry set"}
-ROBOT_MODEL=${ROBOT_MODEL:-"Unknown robot model"}
-ROBOT_PACKAGE=${ROBOT_PACKAGE:-"Unknow robot package"}
-RELEASE_VERSION=${RELEASE_VERSION:-"Unknown release version"}
-RELEASE_CODENAME=${RELEASE_CODENAME:-"Unofficial release"}
 OS_VENDOR=${OS_VENDOR:-"Unknow OS vendor"}
 DEBIAN_SUITE=${DEBIAN_SUITE:-"No Debian version set"}
 
@@ -119,15 +112,7 @@ identify() {
 
     log_info "\nVALUES\n" \
         "ROS distribution: $ROS_DISTRO\n" \
-        "Image type: $IMAGE_TYPE\n" \
-        "Image version:$IMAGE_VERSION\n" \
         "Git revision: $GIT_REV\n" \
-        "Container repository: $DOCKER_REPO\n" \
-        "Container registry: $DOCKER_REGISTRY\n" \
-        "Robot model: $ROBOT_MODEL\n" \
-        "Robot package: $ROBOT_PACKAGE\n" \
-        "Release version: $RELEASE_VERSION\n" \
-        "Release codename: $RELEASE_CODENAME\n" \
         "OS vendor: $OS_VENDOR\n" \
         "Debian suite: $DEBIAN_SUITE\n" \
         "Current working directory: $(pwd)\n"
@@ -167,49 +152,6 @@ add_user() {
     local new_user_uid="$2"
     local new_user_gid="$3"
     local new_user_home="$4"
-
-    # - Remove stale entries (from `docker commit`)
-    sed -i /etc/passwd -e "/^[^:]*:[^:]*:${new_user_uid}:/ d"
-    local retval="$?"
-    if ((retval != 0)); then
-        log_error "Cannot delete UID $new_user_uid from /etc/passwd"
-        return ${retval}
-    fi
-
-    sed -i /etc/passwd -e "/^${new_user_name}:/ d"
-    local retval="$?"
-    if ((retval != 0)); then
-        log_error "Cannot delete USER $new_user_name from /etc/passwd"
-        return ${retval}
-    fi
-
-    sed -i /etc/shadow -e "/^${new_user_name}:/ d"
-    retval="$?"
-    if ((retval != 0)); then
-        log_error "Cannot delete user $new_user_name from /etc/shadow"
-        return ${retval}
-    fi
-
-    sed -i /etc/group -e "/^[^:]*:[^:]*:${new_user_gid}:/ d"
-    retval="$?"
-    if ((retval != 0)); then
-        log_error "Cannot delete GID $new_user_gid from /etc/group"
-        return ${retval}
-    fi
-
-    sed -i /etc/group -e "/^${new_user_gid}:/ d"
-    retval="$?"
-    if ((retval != 0)); then
-        log_error "Cannot delete GROUP $new_user_name from /etc/group"
-        return ${retval}
-    fi
-
-    sed -i /etc/gshadow -e "/^${new_user_name}:/ d"
-    retval="$?"
-    if ((retval != 0)); then
-        log_error "Cannot delete user $new_user_name from /etc/gshadow"
-        return ${retval}
-    fi
 
     # - (Re)create the user
     echo "${new_user_name}:x:${new_user_uid}:${new_user_gid}::${new_user_home}:/bin/bash" >>/etc/passwd
@@ -649,27 +591,26 @@ _main() {
 
     check_for_uid_gid
     retval="$?"
-    if ((retval == 0)); then
-        check_user_and_home
-        retval="$?"
-        if ((retval != 0)); then
-            failure
-        fi
-
-        log_info "Requested run under specified user UID $UID and GID $GID." \
-            "Creating new user."
-
-        add_user "$USER" "$UID" "$GID" "$HOME"
-        retval="$?"
-        if ((retval != 0)); then
-            failure
-        fi
-    else
-        USER="$PPRUSER"
-        HOME="/home/$PPRUSER"
-
-        export ${USER} ${HOME}
+    if ((retval != 0)); then
+        log_error "Illegal UID GID configuration!"
+        failure
     fi
+    
+    check_user_and_home
+    retval="$?"
+    if ((retval != 0)); then
+        failure
+    fi
+
+    log_info "Requested run under specified user UID $UID and GID $GID." \
+        "Creating new user."
+
+    add_user "$USER" "$UID" "$GID" "$HOME"
+    retval="$?"
+    if ((retval != 0)); then
+        failure
+    fi
+
 
     local -a base_user_groups=(plugdev robotusers)
 
@@ -706,44 +647,18 @@ _main() {
         failure
     fi
 
-    # for now we exit, TODO: launch hardware interface and controllers
-    if [[ "$LAUNCHER" == "1" ]]; then
-        log_warning "Launcher run requested." \
-            " The launcher is not currently implemented."
-        finalize_preprocess_commands "$USER"
-        retval="$?"
-        if ((retval != 0)); then
-            failure
-        fi
-
-        ## run execution of ros through supervisord
-        ##run_pathpilot_robot_supervisord "$USER" "$ETC_DIR" "$run_dir"
-
-        # The end of the line
-        retval="$?"
-        if ((retval != 0)); then
-            failure
-        fi
-        success
-    fi
-
-     # Turn off Machinekit-HAL mDNS announcements; dbus socket not bind-mounted
-    set_machinekit_hal_remote "0"
-    retval="$?"
-    if ((retval != 0)); then
-        failure
-    fi
+    #  # Turn off Machinekit-HAL mDNS announcements; dbus socket not bind-mounted
+    # set_machinekit_hal_remote "0"
+    # retval="$?"
+    # if ((retval != 0)); then
+    #     failure
+    # fi
 
     finalize_preprocess_commands "$USER"
     retval="$?"
     if ((retval != 0)); then
         failure
     fi
-    
-    # ======== TEMPORARY
-    export ROS_MASTER_URI=http://127.0.0.1:11311
-    export ROS_IP=127.0.0.1
-    # ==========
 
     # Everything else in the books
     local -a default_cmd=("/bin/bash" "--login" "-i")
