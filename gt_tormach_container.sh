@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
 EXECUTABLE_NAME="$(basename $0 | sed 's/\(\..*\)$//')"
+HARDWARE_MODE=${HARDWARE_MODE:-"sim"}
 
 _write_out() {
     local tag=$1
@@ -43,6 +44,7 @@ usage() {
 }
 
 DOCKER_CLI="$(which docker)"
+DOCKER_RUN_OPTS+=(-e LAUNCHER=1)
 
 if [[ "$DOCKER_CLI" == "" ]]; then
     log_error "Docker CLI executable not found in \${PATH}!" \
@@ -158,7 +160,7 @@ NAME=${NAME:-gt_tormach}
 # Run Docker
 log_info "Launching Za6 container"
 CONTAINER_NAME=${NAME}
-DOCKER_RUN_OPTS+=(-e LAUNCHER=0)
+DOCKER_RUN_OPTS+=(-e HARDWARE_MODE=${HARDWARE_MODE})
 test -z "$DOCKER_CONFIG" || DOCKER_RUN_OPTS+=(-e DOCKER_CONFIG="$DOCKER_CONFIG")
 test -z "$DOCKER_REGISTRY" || DOCKER_RUN_OPTS+=(-e DOCKER_REGISTRY="$DOCKER_REGISTRY")
 test -z "$ROS_SETUP" || DOCKER_RUN_OPTS+=(-e ROS_SETUP="$ROS_SETUP")
@@ -228,6 +230,7 @@ exec ${DO} ${DOCKER_CLI} run --rm \
     -e HOME \
     -e USER \
     -e TERM \
+    -e HARDWARE_MODE \
     -e CURRENT_BASE_OS_VENDOR="$(. /etc/os-release && echo $ID)" \
     -e CURRENT_BASE_OS_DEBIAN_SUITE="$(. /etc/os-release && echo $VERSION_CODENAME)" \
     -e DBUS_SESSION_BUS_ADDRESS \
