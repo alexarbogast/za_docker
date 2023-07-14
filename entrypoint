@@ -3,6 +3,15 @@
 #####################################################################
 # Description:  entrypoint.sh
 #
+#               This is a modified version of the entrypoint used in the
+#               Tormach PathPilot Robot images. It bypasses the pathpilot 
+#               launcher and launches a terminal with the appropriate
+#               ros files sourced. This is to aid in the development
+#               of any ros application that requires modifications to the
+#               existing launch structure of the za6. 
+#
+# Tormach Description:
+#
 #               This file, 'entrypoint.sh', implements general ENTRYPOINT
 #               for use in Tormach PathPilot Robot images. It uses falling
 #               design pattern from the Root user to the passed USER or
@@ -27,8 +36,6 @@ set -o pipefail
 ################################################################################
 
 IDENTIFY=${IDENTIFY:-0}
-VIRTUAL_PATHPILOT=${VIRTUAL_PATHPILOT:-"0"}
-LAUNCHER=${LAUNCHER:-"0"}
 ROBOT_UI=${ROBOT_UI:-"0"}
 
 ROS_DISTRO=${ROS_DISTRO:-"Unknown ROS distribuiton"}
@@ -65,10 +72,6 @@ UID=${UID:-}
 GID=${GID:-}
 USER=${USER:-""}
 HOME=${HOME:-""}
-
-# PPRUSER is environment variable set up during image build
-# If for some reason there is not the PPRUSER env, fail very loundly!
-#PPRUSER=${PPRUSER:-"virtualpathpilot"}
 
 # Commands to run at start-up
 # GLOBAL command is run for every user
@@ -121,7 +124,7 @@ failure() {
 ################################################################################
 
 identify() {
-    log_info "Self description of Tormach PathPilot Robot image"
+    log_info "Self description of Georgia Tech Tormach Robot image"
     log_warning "Container will end after execution of this function!"
 
     log_info "\nVALUES\n" \
@@ -930,106 +933,6 @@ _main() {
         failure
     fi
 
-    # Virtual PathPilot run was requested
-    # if [[ "$VIRTUAL_PATHPILOT" == "1" ]]; then
-    #     log_info "VIRTUAL_PATHPILOT run requested!"
-
-    #     # Check no user, UID or GID were passed
-    #     check_for_uid_gid
-    #     retval="$?"
-    #     if ((retval != 1)); then
-    #         log_error "Requested VIRTUAL_PATHPILOT run but passed GID and UID" \
-    #             "specification. This is not possible."
-    #         failure
-    #     fi
-
-    #     if [[ "$HARDWARE_MODE" != "sim" ]]; then
-    #         log_error "VIRTUAL_PATHPILOT cannot run in other than 'sim' mode."
-    #         failure
-    #     fi
-
-    #     if [[ "$IMAGE_TYPE" != "dist" ]]; then
-    #         log_error "Virtual PathPilot cannot run in 'DEVEL' image!"
-    #         failure
-    #     fi
-
-    #     local pathpilot_uid="$(id -u ${PPRUSER})"
-    #     local pathpilot_gid="$(id -g ${PPRUSER})"
-
-    #     local xdg_runtime_dir="/run/user/$pathpilot_uid"
-
-    #     export DISPLAY=":99"
-    #     export USER="$PPRUSER"
-    #     export HOME="/home/$USER"
-    #     export XDG_RUNTIME_DIR="$xdg_runtime_dir"
-    #     export RUN_DIR="$HOME/.pathpilot"
-    #     export LOG_DIR="$RUN_DIR/logs"
-    #     export FLAVOR="posix"         # Explicitly state we want vanilla Linux Machinekit-HAL
-    #     export ROS_LOG_DIR="$LOG_DIR" # Put ROS logs together for easy access
-
-    #     install_directory "$pathpilot_uid" "$pathpilot_gid" "0700" "$xdg_runtime_dir"
-    #     local retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     add_hostname_to_hosts "$HOSTNAME"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     # Turn off Machinekit-HAL mDNS announcements; dbus socket not bind-mounted
-    #     set_machinekit_hal_remote "0"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     install_directory "$pathpilot_uid" "$pathpilot_gid" "700" "$LOG_DIR"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     install_directory "$pathpilot_uid" "$pathpilot_gid" "700" "$RUN_DIR"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     install_directory "$pathpilot_uid" "$pathpilot_gid" "1777" "/tmp/.X11-unix"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     add_file_to_global_source_list "$ROS_SETUP"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     finalize_preprocess_commands "$USER"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     run_pathpilot_robot_supervisord "$USER" \
-    #         "/etc/pathpilot" "$RUN_DIR" # For Virtual PathPilot Robot run,
-    #     # do not allow changing of config
-    #     # file under any circumstances
-
-    #     # The end of the line, execution should never reach this
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-    #     success
-    # fi
-
-    # Normal run was requested
     check_for_uid_gid
     retval="$?"
     if ((retval == 0)); then
@@ -1113,28 +1016,8 @@ _main() {
             "running this container."
     fi
 
-    # if [[ "$LAUNCHER" == "1" ]]; then
-    #     log_info "PathPilot Robot Launcher run requested."
-
-    #     finalize_preprocess_commands "$USER"
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-
-    #     run_pathpilot_robot_supervisord "$USER" "$ETC_DIR" "$run_dir"
-
-    #     # The end of the line
-    #     retval="$?"
-    #     if ((retval != 0)); then
-    #         failure
-    #     fi
-    #     success
-    # fi
-
     # Everything else in the books
     # Presuming that the main point from here on is to run the Tormach PathPilot Robot suite
-
     local -a robot_extended_user_groups=(dialout video ethercat)
 
     add_user_to_groups "$USER" "${robot_extended_user_groups[@]}"
@@ -1155,6 +1038,10 @@ _main() {
         failure
     fi
 
+    # temporary fix for running without pp launcher: AA
+    if [["$HARDWARE_MODE" != "sim"]] then
+        export RT_CPUS="3,7"
+    fi
     if [[ "$RT_CPUS" != "" ]]; then
         create_rt_cgroup "$RT_CPUS"
         retval="$?"
@@ -1162,18 +1049,6 @@ _main() {
             failure
         fi
     fi
-
-    # create_logrotate_config "$HOME" "$ETC_DIR"
-    # retval="$?"
-    # if ((retval != 0)); then
-    #     failure
-    # fi
-
-    # start_rsyslog
-    # retval="$?"
-    # if ((retval != 0)); then
-    #     failure
-    # fi
 
     finalize_preprocess_commands "$USER"
     retval="$?"
