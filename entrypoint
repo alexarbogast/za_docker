@@ -1039,7 +1039,7 @@ _main() {
     fi
 
     # temporary fix for running without pp launcher: AA
-    if [["$HARDWARE_MODE" != "sim"]] then
+    if [[ "$HARDWARE_MODE" != "sim" ]]; then
         export RT_CPUS="3,7"
     fi
     if [[ "$RT_CPUS" != "" ]]; then

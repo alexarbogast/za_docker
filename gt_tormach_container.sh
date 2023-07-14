@@ -31,15 +31,11 @@ failure() {
 usage() {
     _write_out "$EXECUTABLE_NAME USAGE" \
         "Printout of executable help and usage informations\n\n" \
-        "$0 [-s] [-d] [-v] [-t IMAGE] [-n NAME] [-r REGISTRY]\n" \
+        "$0 [-d] [-d] [-v] [-t IMAGE] [-n NAME] [-r REGISTRY]\n" \
         "Run the launcher container:\n" \
-        "  -f:  Report the failure to start the Launcher (red triangle)\n" \
-        "  -b:  Detach from container (background mode)\n" \
-        "  -d:  Run the distribution image (default mode)\n" \
-        "       |-->  Deprecated flag\n" \
-        "  -r:  Specify a Docker registry from which start the Launcher\n" \
+        "  -d:  Detach from container (background mode)\n" \
+        "  -x:  Run the image in execution mode (on real hardware, not sim)\n" \
         "  -t IMAGE:  Specify the complete image tag\n" \
-        "  -S:  Use Freedesktop Secret Service for storing secrets\n" \
         "  -n NAME:  Set container name and hostname to NAME\n"
 }
 
@@ -55,12 +51,11 @@ fi
 DOCKER_RUN_OPTS=(${DOCKER_ARGS})
 STARTER_RUN_ARGS=()
 
-while getopts :bft:r:n:h ARG; do
+while getopts :dxt:n:h ARG; do
     case $ARG in
-    b) DOCKER_RUN_OPTS+=("-d") ;;
-    f) STARTER_RUN_ARGS+=("-r") ;;
+    d) DOCKER_RUN_OPTS+=("-d") ;;
+    x) HARDWARE_MODE="ethercat" ;;
     t) IMAGE="$OPTARG" ;;
-    r) DOCKER_REGISTRY="$OPTARG" ;;
     n) NAME="$OPTARG" ;;
     h)
         usage
