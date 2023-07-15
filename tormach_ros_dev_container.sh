@@ -76,12 +76,11 @@ done
 shift $(($OPTIND - 1))
 
 # Docker registry used for the launcher
-MAIN_DOCKER_REPOSITORY=${MAIN_DOCKER_REPOSITORY:-ros_public}
-DOCKER_REGISTRY=${DOCKER_REGISTRY:-docker.pathpilot.com}
+MAIN_DOCKER_REPOSITORY=${MAIN_DOCKER_REPOSITORY:-tormach_ros_dev}
+#DOCKER_REGISTRY=${DOCKER_REGISTRY:-docker.pathpilot.com}
 
 # Set params
 IMAGE_TYPE=${IMAGE_TYPE:-dist}
-
 DOCKER_TAG_PATTERN="[^-]+-$IMAGE_TYPE-[^-]+-[0-9]+\.[0-9a-f]+$"
 
 # - Image tag (-t)
@@ -91,12 +90,11 @@ if ! [[ -v IMAGE ]]; then
     DEFAULT_IMAGE=""
 
     mapfile -t POSSIBLE_IMAGES < <(${DOCKER_CLI} image ls \
-        --filter=label=com.tormach.pathpilot.robot.image.type=$IMAGE_TYPE \
-        --filter=reference=$DOCKER_REGISTRY/* \
-        --format='{{.Repository}}:{{.Tag}}')
+            --filter=label=com.tormach.pathpilot.robot.image.type=$IMAGE_TYPE \
+            --format='{{.Repository}}:{{.Tag}}')
 
     for image in ${POSSIBLE_IMAGES[@]}; do
-        if [[ $image =~ $DOCKER_TAG_PATTERN ]]; then
+        if [[ $image =~ $DOCKER_TAG_PATTERN ]] || [[ $image =~ "latest" ]]; then
             created="$(${DOCKER_CLI} inspect -f '{{ index .Config.Labels "com.tormach.pathpilot.robot.createdAt"}}' ${image})" 2>&1
             retval="$?"
             if ((retval != 0)); then
@@ -150,7 +148,7 @@ if ! [[ -v IMAGE ]]; then
 fi
 
 # - Container name (-n)
-NAME=${NAME:-gt_tormach}
+NAME=${NAME:-tormach_ros_dev}
 
 # Run Docker
 log_info "Launching Za6 container"
