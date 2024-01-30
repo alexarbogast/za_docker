@@ -113,4 +113,3 @@ RUN apt-get update && apt-get install -qy --no-install-recommends \
 
 ENV TERM=xterm-256color
 RUN echo "PS1='\e[92m\u\e[0m@\e[94m\h\e[0m:\e[35m\w\e[0m# '" >> /root/.bashrc
-

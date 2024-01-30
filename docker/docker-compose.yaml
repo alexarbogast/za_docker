@@ -1,24 +1,11 @@
 version: "3"
 services:
-  ros1:
+  ros:
     image: ros:noetic-tormach-dev
     build:
       context: .
       dockerfile: Dockerfile 
-    container_name: noetic_tormach_dev1
-    network_mode: host
-    stdin_open: true # docker run -i
-    tty: true        # docker run -t
-    user: ros
-    volumes:
-      - ~/dev/ros_workspaces/noetic/:/home/ros/workspaces
-
-  ros2:
-    image: ros:noetic-tormach-dev
-    build:
-      context: .
-      dockerfile: Dockerfile 
-    container_name: noetic_tormach_dev2
+    container_name: noetic_tormach_dev
     network_mode: host
     stdin_open: true # docker run -i
     tty: true        # docker run -t

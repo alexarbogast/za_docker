@@ -21,41 +21,6 @@ log_error() {
     _write_out "[$NAME] [ERROR]" "$@"
 } >&2
 
-add_hostname_to_hosts() {
-    local hostname="$1"
-    local hosts_file="/etc/hosts"
-
-    echo "127.0.2.1  $hostname" >>${hosts_file}
-    local retval="$?"
-    if ((retval != 0)); then
-        log_error "Cannot add current hostname $hostname to $hosts_file"
-        return ${retval}
-    fi
-
-    log_info "Hostname $hostname added to the $hosts_file file."
-
-    return 0
-}
-
-add_user_to_groups() {
-    local user_name="$1"
-    local -a user_groups=("${@:2}")
-    local retval="-1"
-
-    for grp in "${user_groups[@]}"; do
-        sudo adduser ${user_name} ${grp} >&/dev/null
-        retval="$?"
-        if ((retval != 0)); then
-            log_error "Cannot add user $user_name to group $grp"
-            return ${retval}
-        fi
-
-        log_info "User $user_name added to the group $grp."
-    done
-
-    return 0
-}
-
 set_machinekit_hal_remote() {
     local remote=${1:-"0"}
 
@@ -81,19 +46,6 @@ if ((retval != 0)); then
   exit 1 
 fi
 
-# base_user_groups=(plugdev)
-# add_user_to_groups "ros" "${base_user_groups[@]}"
-# retval="$?"
-# if ((retval != 0)); then
-#   exit 1
-# fi
-#
-# add_hostname_to_hosts "$HOSTNAME"
-# if ((retval != 0)); then
-#   exit 1
-# fi
-#
 # setup ros environment
 source "/opt/ros/$ROS_DISTRO/setup.bash"
-
 exec "$@"
